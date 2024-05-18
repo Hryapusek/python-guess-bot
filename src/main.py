@@ -61,17 +61,24 @@ async def generate_triple_sh(message: types.Message, state: FSMContext):
             ]
         ],
     )
-    image_sight_index = random.randint(0, len(sights) - 1)
-    name_sight_index = random.randint(0, len(sights) - 1)
-    place_sight_index = random.randint(0, len(sights) - 1)
-    logging.info("Generated indexes %s %s %s", image_sight_index, name_sight_index, place_sight_index)
-    if image_sight_index == name_sight_index == place_sight_index:
-        sight = sights[image_sight_index]
+    is_valid = random.choice((True, False))
+    if is_valid:
+        index = random.randint(0, len(sights) - 1)
+        logging.info("Generating valid combination with index %s", index)
+        sight = sights[index]
         caption = f"Название: {sight.name}\n" f"Место: {sight.place}\n\n" "Всё верно?"
         await message.answer_photo(FSInputFile(sight.image), caption=caption, reply_markup=markup)
-        await state.update_data({"is_valid": True, "sight_index": image_sight_index})
+        await state.update_data({"is_valid": True, "sight_index": index})
         await state.set_state(ClientState.GUESSING)
     else:
+        image_sight_index = random.randint(0, len(sights) - 1)
+        name_sight_index = random.randint(0, len(sights) - 1)
+        place_sight_index = random.randint(0, len(sights) - 1)
+        logging.info("Generated indexes %s %s %s", image_sight_index, name_sight_index, place_sight_index)
+        while image_sight_index == name_sight_index == place_sight_index:
+            image_sight_index = random.randint(0, len(sights) - 1)
+            name_sight_index = random.randint(0, len(sights) - 1)
+            place_sight_index = random.randint(0, len(sights) - 1)
         sight = sights[image_sight_index]
         caption = (
             f"Название: {sights[name_sight_index].name}\n"
@@ -119,6 +126,17 @@ async def guessing_sh(message: types.Message, state: FSMContext):
         await state.set_state(ClientState.GENERATE)
     return
 
+@router.message()
+async def any_sh(message: types.Message) -> None:
+    msg = (
+        "Чтобы начать напишите /start"
+    )
+
+    markup = ReplyKeyboardMarkup(
+        resize_keyboard=True, keyboard=[[KeyboardButton(text="/start")]]
+    )
+
+    await message.answer(msg, reply_markup=markup)
 
 async def main():
     bot = Bot(token=token)
