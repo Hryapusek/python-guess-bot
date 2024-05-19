@@ -32,10 +32,10 @@ token = "7091921555:AAG7tiMimRz0BjVa-RRXH1DFFQhqQUBp-9c"
 @router.message(CommandStart())
 async def start_proccess(message: types.Message, state: FSMContext) -> None:
     msg = (
-        "Привет! Я бот который поможет тебе выучить достопримечательности Италии. "
-        "Когда ты нажмешь кнопку 'Загадать' я пришлю тебе картинку, название и место. "
-        "Твоя задача правильно определить существует ли такая достопримечательность в таком месте с таким названием. "
-        "Ну что, поехали?"
+        "Привет! Я - бот, который поможет тебе выучить достопримечательности Испании. "
+        "Когда ты нажмешь кнопку 'Загадать', я пришлю фотографию, название и город. "
+        "Твоя задача - правильно определить, существует ли такая достопримечательность в "
+        "таком месте и с таким названием. Ну что, поехали?"
     )
 
     markup = ReplyKeyboardMarkup(
@@ -102,26 +102,26 @@ async def guessing_sh(message: types.Message, state: FSMContext):
     if user_msg.startswith("да") and data["is_valid"]:
         congratulations_text = ("\n\nПоздравляем, вы успешно справились! "
                                 "Сверху вы можете почитать описание данной достопримечательности. "
-                                "Нажмите кнопку загадать если желаете сыграть еще")
+                                "Нажмите кнопку загадать, если желаете сыграть еще")
         await message.answer(sights[data["sight_index"]].description + congratulations_text, reply_markup=markup)
         await state.set_state(ClientState.GENERATE)
     elif user_msg.startswith("нет") and not data["is_valid"]:
         congratulations_text = ("\n\nПоздравляем, вы успешно справились! "
                                 "Эти данные относятся к разным достопримечательностям. "
-                                "Нажмите кнопку загадать если желаете сыграть еще")
+                                "Нажмите кнопку загадать, если желаете сыграть еще")
         await message.answer(congratulations_text, reply_markup=markup)
         await state.set_state(ClientState.GENERATE)
     elif user_msg.startswith("да") and not data["is_valid"]:
         reply_text = ("К сожалению, вы не угадали... "
                     "Эти данные относятся к разным достопримечательностям. "
-                    "Нажмите кнопку загадать если желаете сыграть еще")
+                    "Нажмите кнопку загадать, если желаете сыграть еще")
         await message.answer(reply_text, reply_markup=markup)
         await state.set_state(ClientState.GENERATE)
     elif user_msg.startswith("нет") and data["is_valid"]:
         reply_text = ("\n\nК сожалению, вы не угадали... "
                     "Такая достопримечательность действительно существует. "
                     "Сверху вы можете почитать описание данной достопримечательности. "
-                    "Нажмите кнопку загадать если желаете сыграть еще")
+                    "Нажмите кнопку загадать, если желаете сыграть еще")
         await message.answer(sights[data["sight_index"]].description + reply_text, reply_markup=markup)
         await state.set_state(ClientState.GENERATE)
     return
