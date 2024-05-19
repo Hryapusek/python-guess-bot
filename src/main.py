@@ -14,7 +14,7 @@ from sightreader.sight_reader import SightReader
 
 sights = SightReader.read_from_directory("res")
 if len(sights) == 0:
-    print("Не смог считать ни одной достопримечатлеьности! Завершаю работу...")
+    print("Не смог считать ни одной достопримечательности! Завершаю работу...")
     exit(1)
 router = Router()
 
