@@ -20,7 +20,7 @@ class SightReader:
 
     @staticmethod
     def __process_file(file_str, images_path) -> Sight:
-        with open(file_str) as file:
+        with open(file_str, encoding="utf-8") as file:
             file_iter = iter(file)
             image_str = next(file_iter, None)
             if image_str is None:
