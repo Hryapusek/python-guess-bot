@@ -38,7 +38,10 @@ async def start_quiz(message: types.Message, state: FSMContext) -> None:
     await send_random_question(message.chat.id, state)
 
 async def send_random_question(chat_id: int, state: FSMContext):
-    question_data = random.choice(quiz.questions)
+    if not hasattr(send_random_question, "question_index"):
+        send_random_question.question_index = 0
+    question_data = quiz.questions[send_random_question.question_index]
+    send_random_question.question_index = (send_random_question.question_index + 1) % len(quiz.questions)
     options = question_data.options
 
     # Create answer buttons
