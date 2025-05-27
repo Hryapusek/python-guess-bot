@@ -1,5 +1,5 @@
 import json
-from typing import List, Dict, Optional
+from typing import List, Optional
 from dataclasses import dataclass, asdict
 
 @dataclass
@@ -11,6 +11,7 @@ class Option:
 class Question:
     question_text: str
     options: List[Option]
+    explanation: Optional[str]
     image_path: Optional[str] = None
 
     def __post_init__(self):
@@ -26,11 +27,12 @@ def load_quiz_from_json(file_path: str) -> Quiz:
     with open(file_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
     
-    questions = []
+    questions: List[Question] = []
     for q in data['questions']:
         options = [Option(**opt) for opt in q['options']]
         questions.append(Question(
             question_text=q['question_text'],
+            explanation=q.get('explanation', None),
             options=options,
             image_path=q.get('image_path'),
         ))

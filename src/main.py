@@ -40,7 +40,6 @@ async def start_quiz(message: types.Message, state: FSMContext) -> None:
 async def send_random_question(chat_id: int, state: FSMContext):
     question_data = random.choice(quiz.questions)
     options = question_data.options
-    correct_index = next(i for i, opt in enumerate(options) if opt.is_correct)
 
     # Create answer buttons
     markup = ReplyKeyboardMarkup(
@@ -82,15 +81,15 @@ async def send_random_question(chat_id: int, state: FSMContext):
     
     # Store correct answer in state
     await state.update_data({
-        'correct_answer': correct_index + 1,
-        'question_text': question_data.question_text
+        'question_data': question_data
     })
     await state.set_state(QuizState.WAITING_ANSWER)
 
 @router.message(QuizState.WAITING_ANSWER)
 async def check_answer(message: types.Message, state: FSMContext):
     user_data = await state.get_data()
-    correct_answer = user_data['correct_answer']
+    question: Question = user_data['question_data']
+    correct_answer = next(i + 1 for i, opt in enumerate(question.options) if opt.is_correct)
     
     try:
         user_answer = int(message.text)
@@ -99,7 +98,7 @@ async def check_answer(message: types.Message, state: FSMContext):
         return
     
     if user_answer == correct_answer:
-        reply = "✅ Correct! Well done!"
+        reply = "✅ Correct! Well done!\n" + (question.explanation or "")
     else:
         reply = f"❌ Wrong! The correct answer was {correct_answer}"
     
