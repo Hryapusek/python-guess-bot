@@ -1,151 +1,123 @@
 import asyncio
 import logging
+import os
 import random
 import sys
+import dotenv
 from aiogram import Bot, Router, types, Dispatcher
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.types.input_file import FSInputFile
 from aiogram.filters.command import CommandStart
-from aiogram.filters.state import State
+from quiz.question import *
 
-from sightreader.sight_reader import SightReader
-
-sights = SightReader.read_from_directory("res")
-if len(sights) == 0:
-    print("Не смог считать ни одной достопримечательности! Завершаю работу...")
+dotenv.load_dotenv()
+quiz = load_quiz_from_json("quiz.json")
+if len(quiz.questions) == 0:
+    print("Couldn't load any questions! Exiting...")
     exit(1)
+
 router = Router()
 
+class QuizState(StatesGroup):
+    """Tracks user's quiz state"""
+    WAITING_ANSWER = State()
 
-class ClientState(StatesGroup):
-    """Хранит на каком этапе диалога находится клиент"""
-
-    GENERATE = State()
-    GUESSING = State()
-
-
-token = "7091921555:AAG7tiMimRz0BjVa-RRXH1DFFQhqQUBp-9c"
-
+TOKEN = os.getenv("TOKEN")
 
 @router.message(CommandStart())
-async def start_proccess(message: types.Message, state: FSMContext) -> None:
-    msg = (
-        "Привет! Я - бот, который поможет тебе выучить достопримечательности Испании. "
-        "Когда ты нажмешь кнопку 'Загадать', я пришлю фотографию, название и город. "
-        "Твоя задача - правильно определить, существует ли такая достопримечательность в "
-        "таком месте и с таким названием. Ну что, поехали?"
+async def start_quiz(message: types.Message, state: FSMContext) -> None:
+    welcome_msg = (
+        "🎓 Welcome to Python Quiz Bot!\n"
+        "I'll send you random Python questions with images.\n"
+        "Reply with the number of the correct answer."
     )
+    
+    await message.answer(welcome_msg)
+    await send_random_question(message.chat.id, state)
 
-    markup = ReplyKeyboardMarkup(
-        resize_keyboard=True, keyboard=[[KeyboardButton(text="Загадать")]]
-    )
+async def send_random_question(chat_id: int, state: FSMContext):
+    question_data = random.choice(quiz.questions)
+    options = question_data.options
+    correct_index = next(i for i, opt in enumerate(options) if opt.is_correct)
 
-    await message.answer(msg, reply_markup=markup)
-    await state.set_state(ClientState.GENERATE)
-
-
-@router.message(ClientState.GENERATE)
-async def generate_triple_sh(message: types.Message, state: FSMContext):
-    user_msg = message.text
-    if user_msg.lower() != "загадать":
-        await message.answer("Введите 'Загадать'")
-        return
+    # Create answer buttons
     markup = ReplyKeyboardMarkup(
         resize_keyboard=True,
+        is_persistent=False,
         keyboard=[
-            [
-                KeyboardButton(text="Да, всё верно"),
-                KeyboardButton(text="Нет, комбинация неверная"),
-            ]
-        ],
+            [KeyboardButton(text=str(i+1)), KeyboardButton(text=str(i+2))]
+            for i in range(0, len(options), 2)
+        ]
     )
-    is_valid = random.choice((True, False))
-    if is_valid:
-        index = random.randint(0, len(sights) - 1)
-        logging.info("Generating valid combination with index %s", index)
-        sight = sights[index]
-        caption = f"Название: {sight.name}\n" f"Место: {sight.place}\n\n" "Всё верно?"
-        await message.answer_photo(FSInputFile(sight.image), caption=caption, reply_markup=markup)
-        await state.update_data({"is_valid": True, "sight_index": index})
-        await state.set_state(ClientState.GUESSING)
+    
+    # Create question text with options
+    question_text_with_options = (
+        f"❓ {question_data.question_text}\n\n"
+        + "\n".join(f"{i+1}. {opt.text}" for i, opt in enumerate(options))
+    )
+    
+    # Send question with image if available
+    if question_data.image_path:
+        try:
+            await bot.send_photo(
+                chat_id=chat_id,
+                photo=FSInputFile(question_data.image_path),
+                caption=question_text_with_options,
+                reply_markup=markup
+            )
+        except:
+            await bot.send_message(
+                chat_id=chat_id,
+                text=question_text_with_options,
+                reply_markup=markup
+            )
     else:
-        image_sight_index = random.randint(0, len(sights) - 1)
-        name_sight_index = random.randint(0, len(sights) - 1)
-        place_sight_index = random.randint(0, len(sights) - 1)
-        logging.info("Generated indexes %s %s %s", image_sight_index, name_sight_index, place_sight_index)
-        while image_sight_index == name_sight_index == place_sight_index:
-            image_sight_index = random.randint(0, len(sights) - 1)
-            name_sight_index = random.randint(0, len(sights) - 1)
-            place_sight_index = random.randint(0, len(sights) - 1)
-        sight = sights[image_sight_index]
-        caption = (
-            f"Название: {sights[name_sight_index].name}\n"
-            f"Место: {sights[place_sight_index].place}\n\n"
-            "Всё верно?"
+        await bot.send_message(
+            chat_id=chat_id,
+            text=question_text_with_options,
+            reply_markup=markup
         )
-        await message.answer_photo(
-            FSInputFile(sights[image_sight_index].image), caption=caption, reply_markup=markup
-        )
-        await state.update_data({"is_valid": False, "sight_index": None})
-        await state.set_state(ClientState.GUESSING)
+    
+    # Store correct answer in state
+    await state.update_data({
+        'correct_answer': correct_index + 1,
+        'question_text': question_data.question_text
+    })
+    await state.set_state(QuizState.WAITING_ANSWER)
 
-
-@router.message(ClientState.GUESSING)
-async def guessing_sh(message: types.Message, state: FSMContext):
-    markup = ReplyKeyboardMarkup(
-        resize_keyboard=True, keyboard=[[KeyboardButton(text="Загадать")]]
-    )
-    user_msg = message.text.lower()
-    data = await state.get_data()
-    if user_msg.startswith("да") and data["is_valid"]:
-        congratulations_text = ("\n\nПоздравляем, вы успешно справились! "
-                                "Сверху вы можете почитать описание данной достопримечательности. "
-                                "Нажмите кнопку загадать, если желаете сыграть еще")
-        await message.answer(sights[data["sight_index"]].description + congratulations_text, reply_markup=markup)
-        await state.set_state(ClientState.GENERATE)
-    elif user_msg.startswith("нет") and not data["is_valid"]:
-        congratulations_text = ("\n\nПоздравляем, вы успешно справились! "
-                                "Эти данные относятся к разным достопримечательностям. "
-                                "Нажмите кнопку загадать, если желаете сыграть еще")
-        await message.answer(congratulations_text, reply_markup=markup)
-        await state.set_state(ClientState.GENERATE)
-    elif user_msg.startswith("да") and not data["is_valid"]:
-        reply_text = ("К сожалению, вы не угадали... "
-                    "Эти данные относятся к разным достопримечательностям. "
-                    "Нажмите кнопку загадать, если желаете сыграть еще")
-        await message.answer(reply_text, reply_markup=markup)
-        await state.set_state(ClientState.GENERATE)
-    elif user_msg.startswith("нет") and data["is_valid"]:
-        reply_text = ("\n\nК сожалению, вы не угадали... "
-                    "Такая достопримечательность действительно существует. "
-                    "Сверху вы можете почитать описание данной достопримечательности. "
-                    "Нажмите кнопку загадать, если желаете сыграть еще")
-        await message.answer(sights[data["sight_index"]].description + reply_text, reply_markup=markup)
-        await state.set_state(ClientState.GENERATE)
-    return
+@router.message(QuizState.WAITING_ANSWER)
+async def check_answer(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    correct_answer = user_data['correct_answer']
+    
+    try:
+        user_answer = int(message.text)
+    except ValueError:
+        await message.answer("Please reply with a number!")
+        return
+    
+    if user_answer == correct_answer:
+        reply = "✅ Correct! Well done!"
+    else:
+        reply = f"❌ Wrong! The correct answer was {correct_answer}"
+    
+    await message.answer(reply)
+    await send_random_question(message.chat.id, state)
 
 @router.message()
-async def any_sh(message: types.Message) -> None:
-    msg = (
-        "Чтобы начать напишите /start"
-    )
-
-    markup = ReplyKeyboardMarkup(
-        resize_keyboard=True, keyboard=[[KeyboardButton(text="/start")]]
-    )
-
-    await message.answer(msg, reply_markup=markup)
+async def handle_other_messages(message: types.Message):
+    await message.answer("Type /start to begin the quiz!")
 
 async def main():
-    bot = Bot(token=token)
+    global bot
+    bot = Bot(token=TOKEN)
     dp = Dispatcher()
     dp.include_router(router)
     await dp.start_polling(bot)
 
-
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-    logging.info("Считал %s достопримечательностей", len(sights))
+    logging.info("Loaded %s questions", len(quiz.questions))
     asyncio.run(main())
